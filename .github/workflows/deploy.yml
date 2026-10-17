@@ -1,0 +1,85 @@
+name: CI/CD
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+env:
+  APP_DIR: /opt/procmon
+  PORT: 8081          # x86c already uses 8080 on the same machine
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.9"      # what Amazon Linux 2023 ships: the server must run there
+      - name: Syntax check
+        run: python -m py_compile procmon.py
+      - name: Tests
+        run: python -m unittest discover -s tests -v
+
+  deploy:
+    needs: test
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    concurrency: deploy            # one deploy at a time: they would race on the file swap
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up SSH
+        run: |
+          install -m 700 -d ~/.ssh
+          echo "${{ secrets.EC2_SSH_KEY }}" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          ssh-keyscan -H "${{ secrets.EC2_HOST }}" >> ~/.ssh/known_hosts
+
+      - name: Upload
+        run: |
+          scp procmon.py ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }}:$APP_DIR/procmon.py.new
+          scp deploy/procmon.service ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }}:/tmp/procmon.service
+
+      - name: Swap, restart, health check (rolls back on failure)
+        run: |
+          ssh ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }} "APP_DIR=$APP_DIR PORT=$PORT bash -s" <<'EOF'
+          set -euo pipefail
+          cd "$APP_DIR"
+
+          # install the unit only if it changed
+          if ! sudo cmp -s /tmp/procmon.service /etc/systemd/system/procmon.service; then
+            sudo cp /tmp/procmon.service /etc/systemd/system/procmon.service
+            sudo systemctl daemon-reload
+          fi
+          rm -f /tmp/procmon.service
+
+          # keep the running version so a bad deploy can be undone
+          [ -f procmon.py ] && cp procmon.py procmon.py.prev
+          mv procmon.py.new procmon.py
+          sudo systemctl restart procmon
+
+          for i in $(seq 1 10); do
+            if curl -fsS "http://127.0.0.1:$PORT/healthz" >/dev/null; then
+              echo "procmon is healthy"
+              exit 0
+            fi
+            sleep 2
+          done
+
+          echo "procmon did not become healthy"
+          if [ -f procmon.py.prev ]; then
+            echo "rolling back to the previous version"
+            mv procmon.py.prev procmon.py
+            sudo systemctl restart procmon
+          fi
+          sudo journalctl -u procmon -n 30 --no-pager || true
+          exit 1
+          EOF
+
+      - name: Public check
+        # set the repository variable SITE_URL (e.g. https://monitor.example.com) once nginx and DNS are in place
+        if: vars.SITE_URL != ''
+        run: curl -fsS --retry 5 --retry-delay 3 "${{ vars.SITE_URL }}/healthz"

@@ -72,7 +72,7 @@ def _disks():
 def snapshot():
     now = time.time()
     with _lock:
-        if now - _cache["t"] < 0.8:           # many tabs -> one /proc scan
+        if now - _cache["t"] < 0.2:           # many tabs -> one /proc scan
             return _cache["body"]
         dt = now - _prev["t"] if _prev["t"] else 0
         total, idle = _cpu_times()
@@ -185,7 +185,7 @@ tr:hover .pin,.pin.on{opacity:1}.pin.on{color:var(--star)}.pin:hover{color:var(-
 <header>
  <h1>procmon<span id=host></span></h1>
  <div class=ctl><span><i id=dot class=dot></i><span id=live>connecting...</span></span>
-  <label>refresh <select id=rf><option value=1000>1 s</option><option value=2000>2 s</option><option value=5000>5 s</option><option value=10000>10 s</option><option value=0>paused</option></select></label></div>
+  <label>refresh <select id=rf title="Faster sampling makes CPU % choppier: Linux counts CPU time in 10 ms steps"><option value=250>0.25 s</option><option value=500>0.5 s</option><option value=1000>1 s</option><option value=2000>2 s</option><option value=5000>5 s</option><option value=10000>10 s</option><option value=0>paused</option></select></label></div>
 </header>
 <main>
  <section id=cards>
@@ -212,7 +212,7 @@ const R=n=>n==null?"-":n<1?"0":B(n)+"/s";
 const lv=(p,w,x)=>p>=x?"x":p>=w?"w":"";
 const store={get(k,d){try{const v=localStorage.getItem(k);return v==null?d:JSON.parse(v)}catch(e){return d}},set(k,v){try{localStorage.setItem(k,JSON.stringify(v))}catch(e){}}};
 
-let D=null,timer=null,pins=store.get("procmon.pins",[]),sortCol=store.get("procmon.sort",3),asc=store.get("procmon.asc",false);
+let D=null,timer=null,busy=false,pins=store.get("procmon.pins",[]),sortCol=store.get("procmon.sort",3),asc=store.get("procmon.asc",false);
 const hist={cpu:[],mem:[]},H=60;
 $("rf").value=store.get("procmon.rf",2000);$("lim").value=store.get("procmon.lim",50);
 
@@ -265,12 +265,12 @@ function pinned(){
 }
 function table(){
  const q=$("q").value.trim().toLowerCase();
- let r=D.procs;if(q)r=r.filter(p=>(p[1]+" "+p[2]+" "+p[0]+" "+p[8]).toLowerCase().includes(q));
+ const pk=new Set(pins.map(p=>p.k));let r=D.procs.filter(p=>!pk.has(p[8]));if(q)r=r.filter(p=>(p[1]+" "+p[2]+" "+p[0]+" "+p[8]).toLowerCase().includes(q));
  const t=sortCol===1||sortCol===2,d=asc?1:-1;
  r=r.slice().sort((a,b)=>{const x=a[sortCol],y=b[sortCol];if(x==null&&y==null)return 0;if(x==null)return 1;if(y==null)return-1;return(t?String(x).localeCompare(y):x-y)*d});
  const total=r.length,lim=+$("lim").value;if(lim)r=r.slice(0,lim);
  $("cnt").textContent=r.length+" of "+total;
- $("b").innerHTML=r.map(p=>row({k:p[8],n:p[1],sub:p[8]!==p[1]?p[8]:"",pid:p[0],user:p[2],cpu:p[3],rss:p[4],rd:p[5],wr:p[6],thr:p[7],star:isPinned(p[8])})).join("")||'<tr><td colspan=9 class=empty>No matching processes</td></tr>';
+ $("b").innerHTML=r.map(p=>row({k:p[8],n:p[1],sub:p[8]!==p[1]?p[8]:"",pid:p[0],user:p[2],cpu:p[3],rss:p[4],rd:p[5],wr:p[6],thr:p[7],star:false})).join("")||'<tr><td colspan=9 class=empty>No matching processes</td></tr>';
 }
 function draw(){if(!D)return;cards();pinned();table()}
 
@@ -285,7 +285,8 @@ $("lim").onchange=()=>{store.set("procmon.lim",+$("lim").value);table()};
 $("rf").onchange=()=>{store.set("procmon.rf",+$("rf").value);schedule()};
 function status(ok,t){$("dot").className="dot"+(ok?"":" off");$("live").textContent=ok?"live · "+t:"disconnected"}
 async function go(){
- if(document.hidden)return;
+ if(document.hidden||busy)return;
+ busy=true;
  try{
   const r=await fetch("api",{cache:"no-store"});
   if(r.status===401){location.reload();return}
@@ -294,6 +295,7 @@ async function go(){
   if(hist.cpu.length>H){hist.cpu.shift();hist.mem.shift()}
   status(true,new Date(D.ts*1000).toLocaleTimeString());draw();
  }catch(e){status(false)}
+ busy=false;
 }
 function schedule(){clearInterval(timer);const ms=+$("rf").value;if(ms)timer=setInterval(go,ms)}
 document.addEventListener("visibilitychange",()=>{if(!document.hidden)go()});

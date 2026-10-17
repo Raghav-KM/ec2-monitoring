@@ -7,8 +7,11 @@ It reads `/proc` when a page asks for it, so it uses no CPU while nobody is look
 The page shows CPU and memory with short history graphs, disk usage, and a sortable, filterable process table with
 usage bars. Click the star next to a process to **pin** it: pinned processes stay in a table at the top, and a pin
 that has no running process is shown as "not running", which makes it easy to spot a crashed service. Pins are
-stored in the browser (localStorage) and follow the command line, so they survive restarts and new PIDs. Press `/` to
-jump to the filter.
+stored in the browser (localStorage) and follow the command line, so they survive restarts and new PIDs. A pinned process
+is listed only in the Pinned table, not again in the main list. Press `/` to jump to the filter.
+
+The refresh rate can go down to every 0.25 s. CPU % then moves in coarser steps, because Linux counts CPU time in
+10 ms ticks (disk I/O and memory stay exact).
 
 Linux only. Python 3.9 or newer.
 

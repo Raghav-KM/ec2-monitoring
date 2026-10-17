@@ -27,7 +27,7 @@ def fetch(url, auth=None):
 class Snapshot(unittest.TestCase):
     def test_shape_and_own_process(self):
         procmon.snapshot()
-        time.sleep(1)                      # the cache lives 0.8 s; the second call computes rates
+        time.sleep(1)                      # the cache lives 0.2 s; the second call computes rates
         d = json.loads(procmon.snapshot())
         self.assertTrue(d["host"])
         self.assertGreater(d["mem"][1], 0)

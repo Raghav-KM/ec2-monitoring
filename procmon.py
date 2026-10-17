@@ -162,21 +162,22 @@ i.w{background:var(--warn)}i.x{background:var(--bad)}
 .sec .tools{display:flex;gap:8px;align-items:center}
 input[type=search]{width:260px;max-width:60vw}
 .tw{background:var(--card);border:1px solid var(--line);border-radius:12px;overflow-x:auto}
-table{width:100%;border-collapse:collapse;font-variant-numeric:tabular-nums}
+table{width:100%;min-width:1000px;table-layout:fixed;border-collapse:collapse;font-variant-numeric:tabular-nums}
 th,td{padding:7px 12px;text-align:right;white-space:nowrap;border-bottom:1px solid var(--line);vertical-align:middle}
 tbody tr:last-child td{border-bottom:0}
 th:nth-child(-n+3),td:nth-child(-n+3){text-align:left}
-th:first-child,td:first-child{width:34px;padding-right:0}
+th:first-child,td:first-child{padding-right:0}
+th:nth-child(1){width:38px}th:nth-child(3){width:96px}th:nth-child(4){width:76px}th:nth-child(5){width:130px}th:nth-child(6){width:150px}th:nth-child(7){width:124px}th:nth-child(8){width:124px}th:nth-child(9){width:84px}
 th{font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:var(--mut);font-weight:600;cursor:pointer;user-select:none}
 th.s{color:var(--text)}
 tbody tr:hover{background:var(--hov)}
 tr.dim td{color:var(--mut)}tr.dim td.nm b{font-weight:500}
-td.nm{max-width:360px}td.nm b{font-weight:600}
+td.nm b{font-weight:600}
 td.nm small{display:block;color:var(--mut);font-size:11px;overflow:hidden;text-overflow:ellipsis}
 td.nm{overflow:hidden;text-overflow:ellipsis}
 .tag{font-size:10px;padding:1px 6px;border-radius:9px;background:var(--track);color:var(--mut);margin-left:6px;vertical-align:1px}
 .tag.bad{background:color-mix(in srgb,var(--bad) 18%,transparent);color:var(--bad)}
-td.v{min-width:92px}td.v .mb{margin-top:3px}td.v em{font-style:normal;color:var(--mut);font-size:11px;margin-left:5px}
+td.v .mb{margin-top:3px}td.v em{font-style:normal;color:var(--mut);font-size:11px;margin-left:5px}
 .pin{border:0;background:none;color:var(--mut);font-size:16px;line-height:1;cursor:pointer;padding:2px 4px;border-radius:5px;opacity:.55}
 tr:hover .pin,.pin.on{opacity:1}.pin.on{color:var(--star)}.pin:hover{color:var(--star);background:var(--track)}
 .empty{padding:18px;text-align:center;color:var(--mut);font-size:13px}

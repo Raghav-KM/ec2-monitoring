@@ -4,6 +4,12 @@ A small web page that shows what an EC2 machine is doing: CPU, RAM and disk I/O 
 memory, swap and disk usage. It is one Python file (`procmon.py`) with no dependencies, only the standard library.
 It reads `/proc` when a page asks for it, so it uses no CPU while nobody is looking (about 20 MB of RAM).
 
+The page shows CPU and memory with short history graphs, disk usage, and a sortable, filterable process table with
+usage bars. Click the star next to a process to **pin** it: pinned processes stay in a table at the top, and a pin
+that has no running process is shown as "not running", which makes it easy to spot a crashed service. Pins are
+stored in the browser (localStorage) and follow the command line, so they survive restarts and new PIDs. Press `/` to
+jump to the filter.
+
 Linux only. Python 3.9 or newer.
 
 ## Run it locally

@@ -29,6 +29,7 @@ class Snapshot(unittest.TestCase):
         procmon.snapshot()
         time.sleep(1)                      # the cache lives 0.8 s; the second call computes rates
         d = json.loads(procmon.snapshot())
+        self.assertTrue(d["host"])
         self.assertGreater(d["mem"][1], 0)
         self.assertLessEqual(d["mem"][0], d["mem"][1])
         self.assertGreaterEqual(d["cpu"], 0)

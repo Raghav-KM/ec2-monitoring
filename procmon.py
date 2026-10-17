@@ -122,7 +122,7 @@ def snapshot():
         mi = _meminfo()
         up = float(_read("/proc/uptime").split()[0])
         body = json.dumps({
-            "ts": now, "cores": os.cpu_count(), "cpu": round(cpu_pct, 1),
+            "ts": now, "host": os.uname().nodename, "cores": os.cpu_count(), "cpu": round(cpu_pct, 1),
             "mem": [mi["MemTotal"] - mi["MemAvailable"], mi["MemTotal"]],
             "swap": [mi["SwapTotal"] - mi["SwapFree"], mi["SwapTotal"]],
             "load": os.getloadavg(), "up": up, "disks": _disks(), "procs": rows,
@@ -135,49 +135,171 @@ def snapshot():
 PAGE = """<!doctype html><meta charset=utf-8><meta name=viewport content="width=device-width,initial-scale=1">
 <title>procmon</title>
 <style>
-:root{color-scheme:light dark;--l:#8884}
-body{font:14px/1.4 system-ui,sans-serif;margin:0;padding:14px;max-width:1200px;margin:auto}
-#s{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:10px;margin-bottom:12px}
-.c{border:1px solid var(--l);border-radius:8px;padding:10px 12px}
-.c b{display:block;font-size:11px;opacity:.6;text-transform:uppercase}
-.c i{font-style:normal;font-size:22px;font-weight:600}.c small{display:block;opacity:.65}
-.bar{height:5px;background:var(--l);border-radius:3px;margin-top:6px;overflow:hidden}
-.bar span{display:block;height:100%;background:#3b82f6}.bar .w{background:#f59e0b}.bar .x{background:#ef4444}
-.d{font-size:12px;margin-top:6px}.d div{display:flex;justify-content:space-between}
-input{padding:6px 9px;border:1px solid var(--l);border-radius:6px;background:none;color:inherit;width:240px;margin-bottom:8px}
-#w{overflow-x:auto;border:1px solid var(--l);border-radius:8px}
-table{border-collapse:collapse;width:100%;font-variant-numeric:tabular-nums}
-th,td{padding:5px 10px;text-align:right;white-space:nowrap;border-bottom:1px solid var(--l)}
-th:first-child,td:first-child,th:nth-child(3),td:nth-child(3){text-align:left}
-th{font-size:11px;text-transform:uppercase;opacity:.7;cursor:pointer}
-td:first-child{max-width:240px;overflow:hidden;text-overflow:ellipsis}.h{color:#ef4444;font-weight:600}
+:root{color-scheme:light dark;--bg:#f4f5f7;--card:#fff;--text:#1b1f27;--mut:#6b7380;--line:#e4e7ec;--acc:#3b82f6;--ok:#16a34a;--warn:#d97706;--bad:#dc2626;--track:#e8ebf0;--hov:#f1f5fd;--star:#e0a100}
+@media(prefers-color-scheme:dark){:root{--bg:#0e1116;--card:#161b22;--text:#e6e9ee;--mut:#8b95a3;--line:#262c36;--acc:#5b9bff;--ok:#3ccf86;--warn:#f0b429;--bad:#f06a6a;--track:#262c36;--hov:#1b2330;--star:#f5c542}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--text);font:14px/1.45 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+header{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;padding:12px 20px;background:var(--card);border-bottom:1px solid var(--line);position:sticky;top:0;z-index:5}
+h1{font-size:15px;margin:0;font-weight:650;letter-spacing:.01em}h1 span{color:var(--mut);font-weight:500;margin-left:8px}
+.ctl{display:flex;gap:12px;align-items:center;color:var(--mut);font-size:12px;flex-wrap:wrap}
+.dot{width:8px;height:8px;border-radius:50%;background:var(--ok);display:inline-block;margin-right:6px}.dot.off{background:var(--bad)}
+select,input{font:inherit;color:var(--text);background:var(--card);border:1px solid var(--line);border-radius:8px;padding:5px 9px}
+select{padding:4px 6px;font-size:12px}
+main{max-width:1320px;margin:0 auto;padding:16px 20px 48px}
+#cards{display:grid;gap:12px;grid-template-columns:repeat(auto-fit,minmax(240px,1fr))}
+.card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:14px 16px}
+h3{margin:0 0 6px;font-size:11px;font-weight:600;color:var(--mut);text-transform:uppercase;letter-spacing:.06em}
+.big{font-size:28px;font-weight:650;line-height:1.1;font-variant-numeric:tabular-nums}
+.sub{color:var(--mut);font-size:12px;margin-top:3px;font-variant-numeric:tabular-nums}
+.spark{display:block;width:100%;height:34px;margin-top:8px;color:var(--acc)}
+.bar,.mb{height:5px;background:var(--track);border-radius:3px;overflow:hidden}.bar{margin-top:9px}
+.bar i,.mb i{display:block;height:100%;background:var(--acc);border-radius:3px;transition:width .4s}
+i.w{background:var(--warn)}i.x{background:var(--bad)}
+.dk{margin-top:11px}.dk:first-child{margin-top:0}.dk .r{display:flex;justify-content:space-between;gap:8px;font-size:12px}
+.dk .r span:first-child{font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.dk .r span:last-child{color:var(--mut)}.dk .bar{margin-top:5px}
+.sec{display:flex;align-items:baseline;justify-content:space-between;gap:12px;margin:22px 0 8px;flex-wrap:wrap}
+.sec h2{margin:0;font-size:13px;font-weight:650}.sec h2 small{color:var(--mut);font-weight:500;margin-left:6px}
+.sec .tools{display:flex;gap:8px;align-items:center}
+input[type=search]{width:260px;max-width:60vw}
+.tw{background:var(--card);border:1px solid var(--line);border-radius:12px;overflow-x:auto}
+table{width:100%;border-collapse:collapse;font-variant-numeric:tabular-nums}
+th,td{padding:7px 12px;text-align:right;white-space:nowrap;border-bottom:1px solid var(--line);vertical-align:middle}
+tbody tr:last-child td{border-bottom:0}
+th:nth-child(-n+3),td:nth-child(-n+3){text-align:left}
+th:first-child,td:first-child{width:34px;padding-right:0}
+th{font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:var(--mut);font-weight:600;cursor:pointer;user-select:none}
+th.s{color:var(--text)}
+tbody tr:hover{background:var(--hov)}
+tr.dim td{color:var(--mut)}tr.dim td.nm b{font-weight:500}
+td.nm{max-width:360px}td.nm b{font-weight:600}
+td.nm small{display:block;color:var(--mut);font-size:11px;overflow:hidden;text-overflow:ellipsis}
+td.nm{overflow:hidden;text-overflow:ellipsis}
+.tag{font-size:10px;padding:1px 6px;border-radius:9px;background:var(--track);color:var(--mut);margin-left:6px;vertical-align:1px}
+.tag.bad{background:color-mix(in srgb,var(--bad) 18%,transparent);color:var(--bad)}
+td.v{min-width:92px}td.v .mb{margin-top:3px}td.v em{font-style:normal;color:var(--mut);font-size:11px;margin-left:5px}
+.pin{border:0;background:none;color:var(--mut);font-size:16px;line-height:1;cursor:pointer;padding:2px 4px;border-radius:5px;opacity:.55}
+tr:hover .pin,.pin.on{opacity:1}.pin.on{color:var(--star)}.pin:hover{color:var(--star);background:var(--track)}
+.empty{padding:18px;text-align:center;color:var(--mut);font-size:13px}
+.note{color:var(--mut);font-size:12px;margin-top:12px}
 </style>
-<div id=s></div>
-<input id=q placeholder="filter name / user / pid / cmd"> <small id=n></small>
-<div id=w><table><thead id=h></thead><tbody id=b></tbody></table></div>
+<header>
+ <h1>procmon<span id=host></span></h1>
+ <div class=ctl><span><i id=dot class=dot></i><span id=live>connecting...</span></span>
+  <label>refresh <select id=rf><option value=1000>1 s</option><option value=2000>2 s</option><option value=5000>5 s</option><option value=10000>10 s</option><option value=0>paused</option></select></label></div>
+</header>
+<main>
+ <section id=cards>
+  <div class=card><h3>CPU</h3><div class=big id=cpuV>-</div><div class=sub id=cpuS></div><svg id=cpuG class=spark viewBox="0 0 120 34" preserveAspectRatio=none></svg></div>
+  <div class=card><h3>Memory</h3><div class=big id=memV>-</div><div class=sub id=memS></div><svg id=memG class=spark viewBox="0 0 120 34" preserveAspectRatio=none></svg></div>
+  <div class=card><h3>Storage</h3><div id=disks></div></div>
+  <div class=card><h3>System</h3><div class=big id=pc>-</div><div class=sub>processes</div><div class=sub id=ld style="margin-top:10px"></div><div class=sub id=up></div></div>
+ </section>
+
+ <div class=sec><h2>Pinned<small id=pn></small></h2></div>
+ <div class=tw><table><thead id=ph></thead><tbody id=pb></tbody></table></div>
+
+ <div class=sec><h2>All processes<small id=cnt></small></h2>
+  <div class=tools><input id=q type=search placeholder="Filter processes   ( / )">
+   <select id=lim><option value=25>top 25</option><option value=50>top 50</option><option value=100>top 100</option><option value=0>all</option></select></div></div>
+ <div class=tw><table><thead id=h></thead><tbody id=b></tbody></table></div>
+ <p class=note>CPU is a percentage of one core (200% = two cores busy). Pins are saved in this browser and follow the command line, so they survive restarts and show "not running" when the process is gone. Disk read/write is real storage I/O; "-" means the process is not readable.</p>
+</main>
 <script>
-const C=[["Process",1,"s"],["PID",0,"n"],["User",2,"s"],["CPU %",3,"n"],["RAM",4,"n"],["Disk rd/s",5,"n"],["Disk wr/s",6,"n"],["Thr",7,"n"]];
-let D,S=3,A=0;const $=i=>document.getElementById(i);
-const B=n=>{if(n==null)return"-";let u="BKMGT",i=0;while(n>=1024&&i<4){n/=1024;i++}return(i?n.toFixed(1):n|0)+" "+u[i]+(i?"B":"")};
+const $=i=>document.getElementById(i);
 const E=s=>String(s).replace(/[&<>"]/g,c=>"&#"+c.charCodeAt(0)+";");
-const cls=p=>p>=90?"x":p>=70?"w":"";
-const card=(t,v,sub,p)=>`<div class=c><b>${t}</b><i>${v}</i><small>${sub}</small>${p==null?"":`<div class=bar><span class=${cls(p)} style=width:${Math.min(p,100)}%></span></div>`}</div>`;
-function draw(){if(!D)return;
- const m=D.mem[0]/D.mem[1]*100,u=D.up,dk=D.disks.map(d=>`<div><span>${E(d[0])}</span><span>${B(d[1])} / ${B(d[2])}</span></div><div class=bar><span class=${cls(d[1]/d[2]*100)} style=width:${d[1]/d[2]*100}%></span></div>`).join("");
- $("s").innerHTML=card("CPU",D.cpu.toFixed(1)+"%",D.cores+" cores · load "+D.load.map(x=>x.toFixed(2)).join(" "),D.cpu)
-  +card("Memory",m.toFixed(1)+"%",B(D.mem[0])+" / "+B(D.mem[1])+(D.swap[1]?" · swap "+B(D.swap[0]):""),m)
-  +`<div class=c><b>Storage</b><div class=d>${dk||"-"}</div></div>`
-  +card("System",D.procs.length+" procs","up "+(u/86400|0)+"d "+(u%86400/3600|0)+"h");
- const q=$("q").value.toLowerCase();let r=D.procs.filter(p=>!q||(p[1]+" "+p[2]+" "+p[0]+" "+p[8]).toLowerCase().includes(q));
- const k=C[S][1],t=C[S][2];r.sort((a,b)=>{let x=a[k],y=b[k];if(x==null)return 1;if(y==null)return-1;return(t=="s"?String(x).localeCompare(y):x-y)*(A?1:-1)});
- $("n").textContent=Math.min(r.length,60)+" of "+r.length;
- $("b").innerHTML=r.slice(0,60).map(p=>`<tr title="${E(p[8])}"><td>${E(p[1])}<td>${p[0]}<td>${E(p[2])}<td class="${p[3]>=80?"h":""}">${p[3].toFixed(1)}<td>${B(p[4])}<td>${B(p[5])}<td>${B(p[6])}<td>${p[7]}`).join("")}
-$("h").innerHTML="<tr>"+C.map((c,i)=>`<th data-i=${i}>${c[0]}${i==S?(A?" \\u25b2":" \\u25bc"):""}`).join("");
-$("h").onclick=e=>{const i=e.target.dataset.i;if(i==null)return;A=(i==S)?!A:(C[i][2]=="s");S=+i;$("h").innerHTML="";draw()};
-$("q").oninput=draw;
-async function go(){if(document.hidden)return;try{D=await(await fetch("api",{cache:"no-store"})).json();draw()}catch(e){}}
-go();setInterval(go,2000);
-</script>""".encode()
+const B=n=>{if(n==null)return"-";let u="BKMGT",i=0;while(n>=1024&&i<4){n/=1024;i++}return(i?n.toFixed(n<10?2:1):Math.round(n))+" "+u[i]+(i?"B":"")};
+const R=n=>n==null?"-":n<1?"0":B(n)+"/s";
+const lv=(p,w,x)=>p>=x?"x":p>=w?"w":"";
+const store={get(k,d){try{const v=localStorage.getItem(k);return v==null?d:JSON.parse(v)}catch(e){return d}},set(k,v){try{localStorage.setItem(k,JSON.stringify(v))}catch(e){}}};
+
+let D=null,timer=null,pins=store.get("procmon.pins",[]),sortCol=store.get("procmon.sort",3),asc=store.get("procmon.asc",false);
+const hist={cpu:[],mem:[]},H=60;
+$("rf").value=store.get("procmon.rf",2000);$("lim").value=store.get("procmon.lim",50);
+
+// columns: label, sort index into the process array (null = not sortable)
+const COLS=[["",null],["Process",1],["User",2],["PID",0],["CPU",3],["RAM",4],["Disk read/s",5],["Disk write/s",6],["Threads",7]];
+function head(el,sortable){el.innerHTML="<tr>"+COLS.map((c,i)=>`<th data-i="${i}"${sortable&&c[1]===sortCol?' class=s':''}>${c[0]}${sortable&&c[1]===sortCol?(asc?" ▲":" ▼"):""}</th>`).join("")+"</tr>"}
+function spark(el,a,cls){
+ if(a.length<2){el.innerHTML="";return}
+ const s=120/(H-1),x0=(H-a.length)*s,pts=a.map((v,i)=>(x0+i*s).toFixed(1)+","+(32-Math.min(v,100)/100*30).toFixed(1)).join(" ");
+ el.innerHTML=`<polygon points="${x0.toFixed(1)},34 ${pts} 120,34" fill="currentColor" opacity=".12"/><polyline points="${pts}" fill="none" stroke="currentColor" stroke-width="1.5" vector-effect="non-scaling-stroke"/>`;
+}
+const isPinned=k=>pins.some(p=>p.k===k);
+function toggle(k,n){pins=isPinned(k)?pins.filter(p=>p.k!==k):pins.concat([{k:k,n:n}]);store.set("procmon.pins",pins);draw()}
+
+function cards(){
+ const m=D.mem[0]/D.mem[1]*100;
+ $("host").textContent=D.host;document.title=D.host+" - procmon";
+ $("cpuV").textContent=D.cpu.toFixed(1)+"%";$("cpuS").textContent=D.cores+" cores · load "+D.load.map(x=>x.toFixed(2)).join("  ");
+ $("memV").textContent=m.toFixed(1)+"%";$("memS").textContent=B(D.mem[0])+" of "+B(D.mem[1])+(D.swap[1]?" · swap "+B(D.swap[0]):"");
+ spark($("cpuG"),hist.cpu);spark($("memG"),hist.mem);
+ $("disks").innerHTML=D.disks.map(d=>{const p=d[1]/d[2]*100;return`<div class=dk><div class=r><span title="${E(d[0])}">${E(d[0])}</span><span>${B(d[1])} / ${B(d[2])} · ${p.toFixed(0)}%</span></div><div class=bar><i class="${lv(p,70,90)}" style="width:${p}%"></i></div></div>`}).join("")||'<div class=sub>no disks</div>';
+ $("pc").textContent=D.procs.length;
+ $("ld").textContent="load average "+D.load.map(x=>x.toFixed(2)).join(" · ");
+ const u=D.up;$("up").textContent="up "+(u>=86400?Math.floor(u/86400)+"d ":"")+Math.floor(u%86400/3600)+"h "+Math.floor(u%3600/60)+"m";
+}
+function bar(v,w,x,txt,extra){const c=lv(v,w,x);return`<td class=v>${txt}${extra||""}<div class=mb><i class="${c}" style="width:${Math.max(0,Math.min(v,100))}%"></i></div>`}
+// o: key, name, sub, pid, user, cpu, rss, rd, wr, thr, star, tag, dim
+function row(o){
+ const mt=D.mem[1];
+ const none=o.cpu==null;
+ return`<tr${o.dim?' class=dim':''}><td><button class="pin${o.star?' on':''}" data-k="${E(o.k)}" data-n="${E(o.n)}" title="${o.star?'Unpin':'Pin'}">${o.star?'★':'☆'}</button>`
+ +`<td class=nm title="${E(o.k)}"><b>${E(o.n)}</b>${o.tag?` <span class="tag${o.tagBad?' bad':''}">${o.tag}</span>`:''}${o.sub?`<small>${E(o.sub)}</small>`:''}`
+ +`<td>${E(o.user)}<td>${o.pid}`
+ +(none?'<td class=v>-<td class=v>-<td>-<td>-<td>-'
+  :bar(o.cpu,40,80,o.cpu.toFixed(1)+"%")
+  +bar(o.rss/mt*100*4,40,100,B(o.rss),`<em>${(o.rss/mt*100).toFixed(1)}%</em>`)
+  +`<td>${R(o.rd)}<td>${R(o.wr)}<td>${o.thr}`)+"</tr>";
+}
+const sumN=(a,i)=>{let s=null;for(const p of a)if(p[i]!=null)s=(s||0)+p[i];return s};
+function pinned(){
+ $("pn").textContent=pins.length?pins.length+" pinned":"";
+ if(!pins.length){$("pb").innerHTML='<tr><td colspan=9 class=empty>Nothing pinned yet. Click ☆ next to a process to keep it here.</td></tr>';return}
+ const g=new Map();for(const p of D.procs){const a=g.get(p[8]);a?a.push(p):g.set(p[8],[p])}
+ $("pb").innerHTML=pins.map(pn=>{
+  const a=g.get(pn.k);
+  if(!a)return row({k:pn.k,n:pn.n,sub:pn.k!==pn.n?pn.k:"",pid:"-",user:"-",cpu:null,star:true,dim:true,tag:"not running",tagBad:true});
+  const p0=a[0];
+  return row({k:pn.k,n:p0[1],sub:p0[8]!==p0[1]?p0[8]:"",pid:a.length>1?"×"+a.length:p0[0],user:p0[2],cpu:a.reduce((s,p)=>s+p[3],0),rss:a.reduce((s,p)=>s+p[4],0),rd:sumN(a,5),wr:sumN(a,6),thr:a.reduce((s,p)=>s+p[7],0),star:true,tag:a.length>1?a.length+" processes":""});
+ }).join("");
+}
+function table(){
+ const q=$("q").value.trim().toLowerCase();
+ let r=D.procs;if(q)r=r.filter(p=>(p[1]+" "+p[2]+" "+p[0]+" "+p[8]).toLowerCase().includes(q));
+ const t=sortCol===1||sortCol===2,d=asc?1:-1;
+ r=r.slice().sort((a,b)=>{const x=a[sortCol],y=b[sortCol];if(x==null&&y==null)return 0;if(x==null)return 1;if(y==null)return-1;return(t?String(x).localeCompare(y):x-y)*d});
+ const total=r.length,lim=+$("lim").value;if(lim)r=r.slice(0,lim);
+ $("cnt").textContent=r.length+" of "+total;
+ $("b").innerHTML=r.map(p=>row({k:p[8],n:p[1],sub:p[8]!==p[1]?p[8]:"",pid:p[0],user:p[2],cpu:p[3],rss:p[4],rd:p[5],wr:p[6],thr:p[7],star:isPinned(p[8])})).join("")||'<tr><td colspan=9 class=empty>No matching processes</td></tr>';
+}
+function draw(){if(!D)return;cards();pinned();table()}
+
+function sortBy(e){const th=e.target.closest("th");if(!th)return;const c=COLS[+th.dataset.i][1];if(c==null)return;
+ if(c===sortCol)asc=!asc;else{sortCol=c;asc=(c===1||c===2)}
+ store.set("procmon.sort",sortCol);store.set("procmon.asc",asc);head($("h"),true);table()}
+$("h").onclick=sortBy;
+document.addEventListener("click",e=>{const b=e.target.closest(".pin");if(b)toggle(b.dataset.k,b.dataset.n)});
+document.addEventListener("keydown",e=>{if(e.key==="/"&&document.activeElement!==$("q")){e.preventDefault();$("q").focus()}});
+$("q").oninput=table;
+$("lim").onchange=()=>{store.set("procmon.lim",+$("lim").value);table()};
+$("rf").onchange=()=>{store.set("procmon.rf",+$("rf").value);schedule()};
+function status(ok,t){$("dot").className="dot"+(ok?"":" off");$("live").textContent=ok?"live · "+t:"disconnected"}
+async function go(){
+ if(document.hidden)return;
+ try{
+  const r=await fetch("api",{cache:"no-store"});
+  if(r.status===401){location.reload();return}
+  D=await r.json();
+  hist.cpu.push(D.cpu);hist.mem.push(D.mem[0]/D.mem[1]*100);
+  if(hist.cpu.length>H){hist.cpu.shift();hist.mem.shift()}
+  status(true,new Date(D.ts*1000).toLocaleTimeString());draw();
+ }catch(e){status(false)}
+}
+function schedule(){clearInterval(timer);const ms=+$("rf").value;if(ms)timer=setInterval(go,ms)}
+document.addEventListener("visibilitychange",()=>{if(!document.hidden)go()});
+head($("ph"),false);head($("h"),true);go();schedule();
+</script>
+""".encode()
 
 
 class H(BaseHTTPRequestHandler):

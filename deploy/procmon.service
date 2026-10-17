@@ -1,0 +1,26 @@
+[Unit]
+Description=procmon, process monitor
+After=network.target
+
+[Service]
+User=ec2-user
+WorkingDirectory=/opt/procmon
+# MONITOR_USER / MONITOR_PASS live on the server only (created by deploy/setup.sh), never in the repo
+EnvironmentFile=-/etc/procmon.env
+# x86c uses 8080; nginx passes the public hostname on to this port
+Environment=HOST=127.0.0.1
+Environment=PORT=8081
+ExecStart=/usr/bin/python3 /opt/procmon/procmon.py
+Restart=on-failure
+
+# Lets the service read /proc/<pid>/io of other users' processes without running as root
+AmbientCapabilities=CAP_SYS_PTRACE
+CapabilityBoundingSet=CAP_SYS_PTRACE
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+MemoryMax=64M
+
+[Install]
+WantedBy=multi-user.target
